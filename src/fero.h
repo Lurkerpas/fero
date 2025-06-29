@@ -19,16 +19,21 @@
 typedef uint64_t Fero_TimeNs;
 typedef char Fero_Name[FERO_NAME_SIZE];
 typedef Fero_TimeNs (*Fero_GetTime)(void);
-typedef bool (*Fero_Tasklet)(void);
+typedef bool (*Fero_Tasklet_Function)(void);
 
 typedef enum 
 {
-    FERO_TASK_INVOCATION_NONE = 0,
-    FERO_TASK_INVOCATION_ALWAYS = 1,
-    FERO_TASK_INVOCATION_PERIODIC = 2,
-    FERO_TASK_INVOCATION_QUEUE = 3,
-} Fero_Task_InvocationType;
+    FERO_TASKLET_INVOCATION_NONE = 0,
+    FERO_TASKLET_INVOCATION_ALWAYS = 1,
+    FERO_TASKLET_INVOCATION_PERIODIC = 2,
+    FERO_TASKLET_INVOCATION_QUEUE = 3,
+} Fero_Tasklet_InvocationType;
 
+/*---DATA STRUCTURES---*/
+
+/**
+ * @brief Queue for storing messages passed between tasklets.
+*/
 typedef struct {
     uint32_t itemSize;
     uint32_t capacity;
@@ -39,27 +44,45 @@ typedef struct {
     uint32_t* sizes;
 } Fero_Queue;
 
+/**
+ * @brief Tasklet definition, containing pointer to user code and scheduling information.
+*/
 typedef struct {
     Fero_Name name;
-    Fero_Task_InvocationType invocationType;
-    Fero_Tasklet tasklet;
+    Fero_Tasklet_InvocationType invocationType;
+    Fero_Tasklet_Function tasklet;
     Fero_Queue* queue;
     Fero_TimeNs period;
     Fero_TimeNs offset;
     Fero_TimeNs deadline;
     Fero_TimeNs nextActivationTime;
     uint32_t priority;
-} Fero_Task;
+} Fero_Tasklet;
+
+/**
+ * @brief Scheduler, responsible for scheduling tasklet invocations
+ */
 
 typedef struct {
-    uint32_t taskCapacity;
-    uint32_t taskCount;
+    uint32_t taskletCapacity;
+    uint32_t taskletCount;
     uint8_t* buffer;
-    Fero_Task** tasks;
+    Fero_Tasklet** tasklets;
 } Fero_Scheduler;
 
 /*---QUEUE---*/
 
+/**
+ * @brief Initialize a queue structure
+ *
+ * This function initializes a queue with the specified capacity, maximum item size and buffer.
+ *
+ * @param self Pointer to the queue to initialize
+ * @param capacity Maximum number of items the queue can hold
+ * @param itemSize Maximum size in bytes of each item in the queue
+ * @param buffer Pre-allocated, alligned buffer for queue storage (use FERO_QUEUE_BUFFER)
+ * @return true on successful initialization, false on failure
+ */
 bool Fero_Queue_init(
     Fero_Queue* self,
     const uint32_t capacity,
@@ -67,68 +90,193 @@ bool Fero_Queue_init(
     uint8_t* buffer
 );
 
+/**
+ * @brief Gets the current number of elements in the queue.
+ *
+ * @param self Pointer to the queue instance.
+ * @return uint32_t The number of elements currently in the queue.
+ */
 uint32_t Fero_Queue_getCount(
     Fero_Queue* self
 );
 
+/**
+ * @brief Adds an item to a queue.
+ *
+ * This function attempts to put data from the provided buffer into the queue.
+ *
+ * @param self Pointer to the queue instance.
+ * @param buffer Pointer to the data buffer to be added to the queue.
+ * @param size Size of the data in bytes to be added to the queue.
+ *
+ * @return true if the data was successfully added to the queue,
+ *         false if the operation failed (e.g., queue is full).
+ */
 bool Fero_Queue_put(
     Fero_Queue* self,
     uint8_t* buffer,
     const uint32_t size
 );
 
+/**
+ * @brief Retrieves an item from the queue.
+ *
+ * This function dequeues an item from the specified queue and copies it into the provided buffer.
+ *
+ * @param self Pointer to the queue instance.
+ * @param buffer Pointer to the buffer where the dequeued item will be stored.
+ * @param size Pointer to a variable that will be updated with the actual size of the dequeued item.
+ *
+ * @return true if an item was successfully retrieved from the queue.
+ * @return false if the queue is empty.
+ */
 bool Fero_Queue_get(
     Fero_Queue* self,
     uint8_t* buffer,
     uint32_t* size
 );
 
-/*---TASK---*/
+/*---TASKLET---*/
 
-bool Fero_Task_init(
-    Fero_Task* self,
+/**
+ * @brief Initializes a tasklet with a name and function.
+ *
+ * This function initializes the provided tasklet structure with the specified name
+ * and tasklet function.
+ *
+ * @param self    Pointer to the tasklet structure to initialize.
+ * @param  name    Name to assign to the tasklet.
+ * @param  tasklet Function pointer to the tasklet implementation.
+ * 
+ * @return true if initialization was successful, false otherwise.
+ */
+bool Fero_Tasklet_init(
+    Fero_Tasklet* self,
     Fero_Name name,
-    Fero_Tasklet tasklet
+    Fero_Tasklet_Function tasklet
 );
 
-bool Fero_Task_setAlwaysActive(
-    Fero_Task* self
+/**
+ * @brief Configures a tasklet to always be in the active state.
+ * 
+ * When a tasklet is configured to always active, it will be considered for execution in every
+ * scheduler cycle.
+ * 
+ * @param self Pointer to the tasklet to configure
+ * @return true if the tasklet was successfully set to always active, false otherwise
+ */
+bool Fero_Tasklet_setAlwaysActive(
+    Fero_Tasklet* self
 );
 
-bool Fero_Task_setPeriodic(
-    Fero_Task* self,
+/**
+ * @brief Configures a tasklet to run periodically with a specified period and offset.
+ *
+ * Configures a tasklet to execute at regular intervals defined by the period,
+ * with an initial time offset from system start.
+ *
+ * @param self Pointer to the tasklet to configure
+ * @param period The time interval between consecutive executions (in nanoseconds)
+ * @param offset The time offset from system start for the first execution (in nanoseconds)
+ * @return true if the tasklet was successfully set to periodic mode, false otherwise
+ */
+bool Fero_Tasklet_setPeriodic(
+    Fero_Tasklet* self,
     const Fero_TimeNs period,
     const Fero_TimeNs offset
 );
 
-bool Fero_Task_setQueueActivated(
-    Fero_Task* self,
+/**
+ * @brief Configures a tasklet to be executed only if the provided queue is not empty.
+ *
+ * @param self Pointer to the tasklet instance
+ * @param queue Pointer to the queue to activate this tasklet
+ * @return true if the tasklet was succesfully set to be activated by the queue, false otherwise
+ */
+bool Fero_Tasklet_setQueueActivated(
+    Fero_Tasklet* self,
     Fero_Queue* queue
 );
 
-bool Fero_Task_isDue(
-    Fero_Task* self,
+/**
+ * @brief Checks if a tasklet is due for execution at a given time.
+ *
+ * This function determines whether the specified tasklet is scheduled for execution.
+ * Tasklet may be due if:
+ * -its time is due for periodic tasklets
+ * -the associated queue is not empty for queue activated tasklets
+ * -it is always active
+ *
+ * @param self Pointer to the tasklet to check.
+ * @param time The current time in nanoseconds to compare against the tasklet's scheduled time.
+ * @return true if the tasklet is due for execution, false otherwise.
+ */
+bool Fero_Tasklet_isDue(
+    Fero_Tasklet* self,
     const Fero_TimeNs time
 );
 
-bool Fero_Task_invoke(
-    Fero_Task* self
+/**
+ * @brief Invokes a tasklet.
+ *
+ * Executes the tasklet pointed to by the given pointer.
+ * This also updates the next activation time for periodic tasklets.
+ *
+ * @param self Pointer to the tasklet to be invoked.
+ * @return true if the tasklet execution was successful, false otherwise.
+ */
+bool Fero_Tasklet_invoke(
+    Fero_Tasklet* self
 );
 
 /*---SCHEDULER---*/
 
+/**
+ * @brief Initializes a scheduler instance
+ *
+ * @param self Pointer to the scheduler instance to be initialized
+ * @param taskletCapacity Maximum number of tasklets the scheduler can manage
+ * @param buffer Memory buffer to be used for scheduler's internal data structures
+ * 
+ * @return true if initialization was successful
+ * @return false if initialization failed
+ */
 bool Fero_Scheduler_init(
     Fero_Scheduler* self,
-    const uint32_t taskCapacity,
+    const uint32_t taskletCapacity,
     uint8_t* buffer
 );
 
-bool Fero_Scheduler_addTask(
+
+/**
+ * @brief Adds a tasklet to the scheduler with specified priority.
+ *
+ * This function adds the provided tasklet to the scheduler's tasklet queue with the given priority.
+ * Higher priority tasklets will be executed before lower priority ones.
+ *
+ * @param self Pointer to the scheduler instance.
+ * @param tasklet Pointer to the tasklet to be added to the scheduler.
+ * @param priority Priority level of the tasklet, higher values indicate higher priority.
+ *
+ * @return true if the tasklet was successfully added to the scheduler, false otherwise.
+ */
+bool Fero_Scheduler_addTasklet(
     Fero_Scheduler* self, 
-    Fero_Task* task,
+    Fero_Tasklet* tasklet,
     const uint32_t priority
 );
 
+
+/**
+ * @brief Invokes the scheduler at a specified time
+ *
+ * This function runs the scheduler at the given time, processing any tasklets that are due to be
+ * executed at or before that time.
+ *
+ * @param self Pointer to the scheduler instance
+ * @param time The current time in nanoseconds
+ * @return true
+ */
 bool Fero_Scheduler_invoke(
     Fero_Scheduler* self,
     const Fero_TimeNs time

@@ -74,17 +74,17 @@ bool Fero_Queue_get(
     return true;
 }
 
-/*---TASK---*/
+/*---TASKLET---*/
 
-bool Fero_Task_init(
-    Fero_Task* self,
+bool Fero_Tasklet_init(
+    Fero_Tasklet* self,
     Fero_Name name,
-    Fero_Tasklet tasklet
+    Fero_Tasklet_Function tasklet
 )
 {
     memcpy(self->name, name, FERO_NAME_SIZE);
     self->tasklet = tasklet;
-    self->invocationType = FERO_TASK_INVOCATION_NONE;
+    self->invocationType = FERO_TASKLET_INVOCATION_NONE;
     self->queue = NULL;
     self->period = 0;
     self->offset = 0;
@@ -94,60 +94,60 @@ bool Fero_Task_init(
     return true;
 }
 
-bool Fero_Task_setAlwaysActive(
-    Fero_Task* self
+bool Fero_Tasklet_setAlwaysActive(
+    Fero_Tasklet* self
 )
 {
-    self->invocationType = FERO_TASK_INVOCATION_ALWAYS;
+    self->invocationType = FERO_TASKLET_INVOCATION_ALWAYS;
     return true;
 }
 
-bool Fero_Task_setPeriodic(
-    Fero_Task* self,
+bool Fero_Tasklet_setPeriodic(
+    Fero_Tasklet* self,
     const Fero_TimeNs period,
     const Fero_TimeNs offset
 )
 {
-    self->invocationType = FERO_TASK_INVOCATION_PERIODIC;
+    self->invocationType = FERO_TASKLET_INVOCATION_PERIODIC;
     self->period = period;
     self->offset = offset;
     self->nextActivationTime = offset;
     return true;
 }
 
-bool Fero_Task_setQueueActivated(
-    Fero_Task* self,
+bool Fero_Tasklet_setQueueActivated(
+    Fero_Tasklet* self,
     Fero_Queue* queue
 )
 {
-    self->invocationType = FERO_TASK_INVOCATION_QUEUE;
+    self->invocationType = FERO_TASKLET_INVOCATION_QUEUE;
     self->queue = queue;
     return true;
 }
 
-bool Fero_Task_isDue(
-    Fero_Task* self,
+bool Fero_Tasklet_isDue(
+    Fero_Tasklet* self,
     const Fero_TimeNs time
 )
 {
     switch (self->invocationType)
     {
-        case FERO_TASK_INVOCATION_ALWAYS:
+        case FERO_TASKLET_INVOCATION_ALWAYS:
             return true;
-        case FERO_TASK_INVOCATION_PERIODIC:
+        case FERO_TASKLET_INVOCATION_PERIODIC:
             return self->nextActivationTime <= time;
-        case FERO_TASK_INVOCATION_QUEUE:
+        case FERO_TASKLET_INVOCATION_QUEUE:
             return Fero_Queue_getCount(self->queue) > 0;
         default:
             return false;
     }
 }
 
-bool Fero_Task_invoke(
-    Fero_Task* self
+bool Fero_Tasklet_invoke(
+    Fero_Tasklet* self
 )
 {
-    if (self->invocationType == FERO_TASK_INVOCATION_PERIODIC)
+    if (self->invocationType == FERO_TASKLET_INVOCATION_PERIODIC)
     {
         self->nextActivationTime += self->period;
     }
@@ -159,7 +159,7 @@ bool Fero_Task_invoke(
 
 bool Fero_Scheduler_init(
     Fero_Scheduler* self,
-    const uint32_t taskCapacity,
+    const uint32_t taskletCapacity,
     uint8_t* buffer
 )
 {
@@ -168,42 +168,42 @@ bool Fero_Scheduler_init(
         // Alignment on 4 bytes is required
         return false;
     }
-    self->taskCapacity = taskCapacity;
-    self->taskCount = 0;
+    self->taskletCapacity = taskletCapacity;
+    self->taskletCount = 0;
     self->buffer = buffer;
-    self->tasks = (Fero_Task**)buffer;
+    self->tasklets = (Fero_Tasklet**)buffer;
     return true;
 }
 
-bool Fero_Scheduler_addTask(
+bool Fero_Scheduler_addTasklet(
     Fero_Scheduler* self, 
-    Fero_Task* task,
+    Fero_Tasklet* tasklet,
     const uint32_t priority
 )
 {
-    if (self->taskCount == self->taskCapacity)
+    if (self->taskletCount == self->taskletCapacity)
     {
         return false;
     }
-    task->priority = priority;
-    self->taskCount++;
+    tasklet->priority = priority;
+    self->taskletCount++;
     // Try to insert it before an existing one
-    for (uint32_t index = 0; index < self->taskCount - 1; index++)
+    for (uint32_t index = 0; index < self->taskletCount - 1; index++)
     {
-        if (self->tasks[index]->priority < priority)
+        if (self->tasklets[index]->priority < priority)
         {
-            // Move all existing tasks by one place
-            for (uint32_t backIndex = self->taskCount - 1; backIndex > index; backIndex--)
+            // Move all existing tasklets by one place
+            for (uint32_t backIndex = self->taskletCount - 1; backIndex > index; backIndex--)
             {
-                self->tasks[backIndex] = self->tasks[backIndex-1];
+                self->tasklets[backIndex] = self->tasklets[backIndex-1];
             }
-            // Insert task
-            self->tasks[index] = task;
+            // Insert tasklet
+            self->tasklets[index] = tasklet;
             return true;
         }
     }
     // Was not inserted before an exising one, so add it at the end
-    self->tasks[self->taskCount - 1] = task;
+    self->tasklets[self->taskletCount - 1] = tasklet;
     return true;
 }
 
@@ -212,11 +212,11 @@ bool Fero_Scheduler_invoke(
     const Fero_TimeNs time
 )
 {
-    for (uint32_t index = 0; index < self->taskCount; index++)
+    for (uint32_t index = 0; index < self->taskletCount; index++)
     {
-        if (Fero_Task_isDue(self->tasks[index], time))
+        if (Fero_Tasklet_isDue(self->tasklets[index], time))
         {
-            Fero_Task_invoke(self->tasks[index]);
+            Fero_Tasklet_invoke(self->tasklets[index]);
             return true;
         }
     }
