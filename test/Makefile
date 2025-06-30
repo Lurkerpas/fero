@@ -25,4 +25,4 @@ $(BUILD_DIR)/test_fero: $(FERO_SOURCES) $(FERO_HEADERS) $(UNITY_SOURCES) test_fe
 	$(BUILD_DIR)/test_fero
 
 clean:
-	rm -r $(BUILD_DIR)
+	rm -r -f $(BUILD_DIR)
