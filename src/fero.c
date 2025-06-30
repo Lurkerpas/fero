@@ -79,7 +79,8 @@ bool Fero_Queue_get(
 bool Fero_Tasklet_init(
     Fero_Tasklet* self,
     Fero_Name name,
-    Fero_Tasklet_Function tasklet
+    Fero_Tasklet_Function tasklet,
+    void* taskletData
 )
 {
     memcpy(self->name, name, FERO_NAME_SIZE);
@@ -88,9 +89,9 @@ bool Fero_Tasklet_init(
     self->queue = NULL;
     self->period = 0;
     self->offset = 0;
-    self->deadline = 0;
     self->nextActivationTime = 0;
     self->priority = 0;
+    self->taskletData = taskletData;
     return true;
 }
 
@@ -151,7 +152,7 @@ bool Fero_Tasklet_invoke(
     {
         self->nextActivationTime += self->period;
     }
-    self->tasklet();
+    self->tasklet(self->taskletData);
     return true;
 }
 

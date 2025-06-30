@@ -2,27 +2,21 @@
 #include "../libs/Unity/src/unity.h"
 
 /* Dummy function and counter to test tasklet invocations */
-static uint32_t tasklet_counter = 0;
-static uint32_t tasklet_counter2 = 0;
 
-static bool increase_tasklet_counter();
-static bool increase_tasklet_counter2();
+static bool increase_tasklet_counter(void* data);
 
-static bool increase_tasklet_counter()
+static bool increase_tasklet_counter(void* data)
 {
-    tasklet_counter++;
-    return true;
-}
-
-static bool increase_tasklet_counter2()
-{
-    tasklet_counter2++;
+    if (data != NULL)
+    {
+        int* counter = (int*)data;
+        (*counter)++;
+    }
     return true;
 }
 
 void setUp()
 {
-    tasklet_counter = 0;
 }
 
 void tearDown()
@@ -176,16 +170,17 @@ void Fero_Tasklet_init_works()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "TestTasklet";
+    int counter = 0;
     
-    TEST_ASSERT_TRUE(Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter));
+    TEST_ASSERT_TRUE(Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter, &counter));
     
     TEST_ASSERT_EQUAL_STRING_LEN(name, tasklet.name, FERO_NAME_SIZE);
     TEST_ASSERT_EQUAL_PTR(increase_tasklet_counter, tasklet.tasklet);
+    TEST_ASSERT_EQUAL_PTR(&counter, tasklet.taskletData);
     TEST_ASSERT_EQUAL_INT(FERO_TASKLET_INVOCATION_NONE, tasklet.invocationType);
     TEST_ASSERT_NULL(tasklet.queue);
     TEST_ASSERT_EQUAL_UINT64(0, tasklet.period);
     TEST_ASSERT_EQUAL_UINT64(0, tasklet.offset);
-    TEST_ASSERT_EQUAL_UINT64(0, tasklet.deadline);
     TEST_ASSERT_EQUAL_UINT64(0, tasklet.nextActivationTime);
     TEST_ASSERT_EQUAL_UINT32(0, tasklet.priority);
 }
@@ -194,7 +189,7 @@ void Fero_Tasklet_setAlwaysActive_works()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "TestTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     
     TEST_ASSERT_TRUE(Fero_Tasklet_setAlwaysActive(&tasklet));
     TEST_ASSERT_EQUAL_INT(FERO_TASKLET_INVOCATION_ALWAYS, tasklet.invocationType);
@@ -204,7 +199,7 @@ void Fero_Tasklet_setPeriodic_works()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "TestTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     
     Fero_TimeNs period = 1000000000;  // 1 second
     Fero_TimeNs offset = 500000000;   // 0.5 seconds
@@ -220,7 +215,7 @@ void Fero_Tasklet_setQueueActivated_works()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "TestTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     
     FERO_QUEUE_BUFFER(buffer, 2, 10);
     Fero_Queue queue;
@@ -235,7 +230,7 @@ void Fero_Tasklet_isDue_works_for_always()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "AlwaysTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     Fero_Tasklet_setAlwaysActive(&tasklet);
     
     TEST_ASSERT_TRUE(Fero_Tasklet_isDue(&tasklet, 0));
@@ -247,7 +242,7 @@ void Fero_Tasklet_isDue_works_for_periodic()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "PeriodicTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     
     Fero_TimeNs period = 10;
     Fero_TimeNs offset = 5;
@@ -266,7 +261,7 @@ void Fero_Tasklet_isDue_works_for_queue()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "QueueTasklet";
-    Fero_Tasklet_init(&tasklet, name, NULL);
+    Fero_Tasklet_init(&tasklet, name, NULL, NULL);
     
     FERO_QUEUE_BUFFER(buffer, 2, 10);
     Fero_Queue queue;
@@ -286,7 +281,8 @@ void Fero_Tasklet_invoke_works()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "TestTasklet";
-    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter);
+    int tasklet_counter = 0;
+    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter, &tasklet_counter);
     
     TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter);
     TEST_ASSERT_TRUE(Fero_Tasklet_invoke(&tasklet));
@@ -299,7 +295,7 @@ void Fero_Tasklet_invoke_updates_periodic_tasklet_time()
 {
     Fero_Tasklet tasklet;
     Fero_Name name = "PeriodicTasklet";
-    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter, NULL);
     
     Fero_TimeNs period = 1000000000;  // 1 second
     Fero_TimeNs offset = 500000000;   // 0.5 seconds
@@ -342,7 +338,7 @@ void Fero_Scheduler_addTasklet_works()
     
     Fero_Tasklet tasklet1;
     Fero_Name name1 = "Tasklet1";
-    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter, NULL);
     
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &tasklet1, 5));
     TEST_ASSERT_EQUAL_UINT32(1, scheduler.taskletCount);
@@ -358,11 +354,11 @@ void Fero_Scheduler_addTasklet_fails_when_full()
     
     Fero_Tasklet tasklet1;
     Fero_Name name1 = "Tasklet1";
-    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter, NULL);
     
     Fero_Tasklet tasklet2;
     Fero_Name name2 = "Tasklet2";
-    Fero_Tasklet_init(&tasklet2, name2, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet2, name2, increase_tasklet_counter, NULL);
     
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &tasklet1, 1));
     TEST_ASSERT_FALSE(Fero_Scheduler_addTasklet(&scheduler, &tasklet2, 2));
@@ -377,15 +373,15 @@ void Fero_Scheduler_addTasklet_sorts_by_priority()
     
     Fero_Tasklet tasklet1;
     Fero_Name name1 = "Tasklet1";
-    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet1, name1, increase_tasklet_counter, NULL);
     
     Fero_Tasklet tasklet2;
     Fero_Name name2 = "Tasklet2";
-    Fero_Tasklet_init(&tasklet2, name2, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet2, name2, increase_tasklet_counter, NULL);
     
     Fero_Tasklet tasklet3;
     Fero_Name name3 = "Tasklet3";
-    Fero_Tasklet_init(&tasklet3, name3, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet3, name3, increase_tasklet_counter, NULL);
     
     // Add in incorrect priority order
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &tasklet1, 1));
@@ -404,9 +400,10 @@ void Fero_Scheduler_invoke_works()
     Fero_Scheduler scheduler;
     Fero_Scheduler_init(&scheduler, 3, buffer);
     
+    int tasklet_counter = 0;
     Fero_Tasklet tasklet;
     Fero_Name name = "Tasklet";
-    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter);
+    Fero_Tasklet_init(&tasklet, name, increase_tasklet_counter, &tasklet_counter);
     Fero_Tasklet_setAlwaysActive(&tasklet);
     
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &tasklet, 1));
@@ -422,15 +419,18 @@ void Fero_Scheduler_invoke_respects_priority()
     Fero_Scheduler scheduler;
     Fero_Scheduler_init(&scheduler, 2, buffer);
     
+
+    int tasklet_counter1 = 0;
+    int tasklet_counter2 = 0;
     // Setup two always active tasklets
     Fero_Tasklet lowPriorityTasklet;
     Fero_Name lowName = "LowTasklet";
-    Fero_Tasklet_init(&lowPriorityTasklet, lowName, increase_tasklet_counter);
+    Fero_Tasklet_init(&lowPriorityTasklet, lowName, increase_tasklet_counter, &tasklet_counter1);
     Fero_Tasklet_setAlwaysActive(&lowPriorityTasklet);
     
     Fero_Tasklet highPriorityTasklet;
     Fero_Name highName = "HighTasklet";
-    Fero_Tasklet_init(&highPriorityTasklet, highName, increase_tasklet_counter2);
+    Fero_Tasklet_init(&highPriorityTasklet, highName, increase_tasklet_counter, &tasklet_counter2);
     Fero_Tasklet_setAlwaysActive(&highPriorityTasklet);
     
     // Add low priority first, then high priority
@@ -438,12 +438,12 @@ void Fero_Scheduler_invoke_respects_priority()
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &highPriorityTasklet, 2));
     
     // Invoke should call the high priority tasklet
-    TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter);
+    TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter1);
     TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter2);
     
     TEST_ASSERT_TRUE(Fero_Scheduler_invoke(&scheduler, 0));
     
-    TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter);
+    TEST_ASSERT_EQUAL_UINT32(0, tasklet_counter1);
     TEST_ASSERT_EQUAL_UINT32(1, tasklet_counter2);
 }
 
@@ -453,9 +453,10 @@ void Fero_Scheduler_invoke_handles_periodic_tasklets()
     Fero_Scheduler scheduler;
     Fero_Scheduler_init(&scheduler, 1, buffer);
     
+    int tasklet_counter = 0;
     Fero_Tasklet periodicTasklet;
     Fero_Name name = "PeriodicTasklet";
-    Fero_Tasklet_init(&periodicTasklet, name, increase_tasklet_counter);
+    Fero_Tasklet_init(&periodicTasklet, name, increase_tasklet_counter, &tasklet_counter);
     
     Fero_TimeNs period = 10;
     Fero_TimeNs offset = 5;
@@ -491,9 +492,10 @@ void Fero_Scheduler_invoke_handles_queue_tasklets()
     Fero_Queue queue;
     Fero_Queue_init(&queue, 2, 10, queueBuffer);
     
+    int tasklet_counter = 0;
     Fero_Tasklet queueTasklet;
     Fero_Name name = "QueueTasklet";
-    Fero_Tasklet_init(&queueTasklet, name, increase_tasklet_counter);
+    Fero_Tasklet_init(&queueTasklet, name, increase_tasklet_counter, &tasklet_counter);
     Fero_Tasklet_setQueueActivated(&queueTasklet, &queue);
     
     TEST_ASSERT_TRUE(Fero_Scheduler_addTasklet(&scheduler, &queueTasklet, 1));

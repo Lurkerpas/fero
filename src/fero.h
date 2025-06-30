@@ -18,8 +18,7 @@
 
 typedef uint64_t Fero_TimeNs;
 typedef char Fero_Name[FERO_NAME_SIZE];
-typedef Fero_TimeNs (*Fero_GetTime)(void);
-typedef bool (*Fero_Tasklet_Function)(void);
+typedef bool (*Fero_Tasklet_Function)(void*);
 
 typedef enum 
 {
@@ -51,10 +50,10 @@ typedef struct {
     Fero_Name name;
     Fero_Tasklet_InvocationType invocationType;
     Fero_Tasklet_Function tasklet;
+    void* taskletData;
     Fero_Queue* queue;
     Fero_TimeNs period;
     Fero_TimeNs offset;
-    Fero_TimeNs deadline;
     Fero_TimeNs nextActivationTime;
     uint32_t priority;
 } Fero_Tasklet;
@@ -144,16 +143,18 @@ bool Fero_Queue_get(
  * This function initializes the provided tasklet structure with the specified name
  * and tasklet function.
  *
- * @param self    Pointer to the tasklet structure to initialize.
- * @param  name    Name to assign to the tasklet.
- * @param  tasklet Function pointer to the tasklet implementation.
+ * @param self Pointer to the tasklet structure to initialize.
+ * @param name Name to assign to the tasklet.
+ * @param tasklet Function pointer to the tasklet implementation.
+ * @param taskletData User data to pass to the tasklet function.
  * 
  * @return true if initialization was successful, false otherwise.
  */
 bool Fero_Tasklet_init(
     Fero_Tasklet* self,
     Fero_Name name,
-    Fero_Tasklet_Function tasklet
+    Fero_Tasklet_Function tasklet,
+    void* taskletData
 );
 
 /**
