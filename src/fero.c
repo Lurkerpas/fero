@@ -74,16 +74,33 @@ bool Fero_Queue_get(
     return true;
 }
 
+bool Fero_Queue_peek(
+    Fero_Queue* self,
+    uint8_t* buffer,
+    uint32_t* size
+)
+{
+    if (self->count == 0)
+    {
+        return false;
+    }
+    const uint32_t index = self->lastIndex;
+    *size = self->sizes[index];
+    uint8_t* source = &(self->backingBuffer[index * self->itemSize]);
+    memcpy(buffer, source, *size);
+    return true;
+}
+
 /*---TASKLET---*/
 
 bool Fero_Tasklet_init(
     Fero_Tasklet* self,
-    Fero_Name name,
+    char* name,
     Fero_Tasklet_Function tasklet,
     void* taskletData
 )
 {
-    memcpy(self->name, name, FERO_NAME_SIZE);
+    strcpy(self->name, name);
     self->tasklet = tasklet;
     self->invocationType = FERO_TASKLET_INVOCATION_NONE;
     self->queue = NULL;

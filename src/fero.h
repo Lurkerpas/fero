@@ -135,6 +135,25 @@ bool Fero_Queue_get(
     uint32_t* size
 );
 
+/**
+ * @brief Peeks an item from the queue.
+ *
+ * This function peeks an item from the specified queue and copies it into the provided buffer.
+ * The item is not removed from the queue.
+ *
+ * @param self Pointer to the queue instance.
+ * @param buffer Pointer to the buffer where the peeked item will be stored.
+ * @param size Pointer to a variable that will be updated with the actual size of the peeked item.
+ *
+ * @return true if an item was successfully peeked from the queue.
+ * @return false if the queue is empty.
+ */
+bool Fero_Queue_peek(
+    Fero_Queue* self,
+    uint8_t* buffer,
+    uint32_t* size
+);
+
 /*---TASKLET---*/
 
 /**
@@ -152,7 +171,7 @@ bool Fero_Queue_get(
  */
 bool Fero_Tasklet_init(
     Fero_Tasklet* self,
-    Fero_Name name,
+    char* name,
     Fero_Tasklet_Function tasklet,
     void* taskletData
 );
