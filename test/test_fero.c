@@ -166,6 +166,42 @@ void Fero_Queue_get_works_with_wraparound()
     TEST_ASSERT_FALSE(Fero_Queue_get(&queue, outBuffer, &outSize));
 }
 
+void Fero_Queue_peek_works()
+{
+    FERO_QUEUE_BUFFER(buffer, 3, 10);
+    Fero_Queue queue;
+    Fero_Queue_init(&queue, 3, 10, buffer);
+    
+    uint8_t outBuffer[10];
+    uint32_t outSize;
+    TEST_ASSERT_FALSE(Fero_Queue_peek(&queue, outBuffer, &outSize));
+    
+    uint8_t data1[] = {1, 2, 3, 4};
+    Fero_Queue_put(&queue, data1, sizeof(data1));
+    uint8_t data2[] = {5, 6, 7};
+    Fero_Queue_put(&queue, data2, sizeof(data2));
+    
+    // Peek should return first item but not remove it
+    TEST_ASSERT_TRUE(Fero_Queue_peek(&queue, outBuffer, &outSize));
+    TEST_ASSERT_EQUAL_UINT32(sizeof(data1), outSize);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(data1, outBuffer, sizeof(data1));
+    TEST_ASSERT_EQUAL_UINT32(2, Fero_Queue_getCount(&queue));
+    
+    // Peek again should return same item
+    TEST_ASSERT_TRUE(Fero_Queue_peek(&queue, outBuffer, &outSize));
+    TEST_ASSERT_EQUAL_UINT32(sizeof(data1), outSize);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(data1, outBuffer, sizeof(data1));
+    TEST_ASSERT_EQUAL_UINT32(2, Fero_Queue_getCount(&queue));
+    
+    // After get, peek should return next item
+    TEST_ASSERT_TRUE(Fero_Queue_get(&queue, outBuffer, &outSize));
+    TEST_ASSERT_TRUE(Fero_Queue_peek(&queue, outBuffer, &outSize));
+    TEST_ASSERT_EQUAL_UINT32(sizeof(data2), outSize);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(data2, outBuffer, sizeof(data2));
+    TEST_ASSERT_EQUAL_UINT32(1, Fero_Queue_getCount(&queue));
+}
+
+
 void Fero_Tasklet_init_works()
 {
     Fero_Tasklet tasklet;
@@ -523,6 +559,7 @@ int main(void)
     RUN_TEST(Fero_Queue_put_fails_when_full);
     RUN_TEST(Fero_Queue_get_works);
     RUN_TEST(Fero_Queue_get_works_with_wraparound);
+    RUN_TEST(Fero_Queue_peek_works);
     RUN_TEST(Fero_Tasklet_init_works);
     RUN_TEST(Fero_Tasklet_setAlwaysActive_works);
     RUN_TEST(Fero_Tasklet_setPeriodic_works);
